@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Our Sky</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#04050c">
+<meta name="format-detection" content="telephone=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500&display=swap">
+<style>
+/* Layout: one full-bleed canvas sky; HUD floats on top; memories rise in a bottom sheet. Single dark look by design. */
+:root{
+  --bg:#04050c;
+  --ink:#f3eee6;
+  --muted:#a29fb6;
+  --faint:rgba(243,238,230,.16);
+  --sheet:rgba(11,12,24,.86);
+  --lit:#6dffa8;
+  --serif:'Cormorant Garamond','Noto Serif SC',Georgia,serif;
+  --zh:'Noto Serif SC','Songti SC','STSong','SimSun',serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font-family:var(--serif);touch-action:none;position:fixed;inset:0;width:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+img{-webkit-user-drag:none;user-drag:none}
+
+#sky{position:fixed;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#sky.dragging{cursor:grabbing}
+
+/* HUD */
+.hud{position:fixed;left:0;right:0;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding-top:calc(env(safe-area-inset-top,0px) + 10px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  pointer-events:none;transition:opacity .9s ease}
+.hud>*{pointer-events:auto}
+.count{display:flex;align-items:center;gap:9px;min-height:44px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--ink);font-variant-numeric:tabular-nums}
+.count svg{width:13px;height:13px;fill:var(--lit);filter:drop-shadow(0 0 5px rgba(109,255,168,.7));transition:transform .5s cubic-bezier(.34,1.56,.64,1)}
+.count.bump svg{transform:scale(1.7) rotate(72deg)}
+.count .of{color:var(--muted)}
+.lang{display:flex;border:1px solid var(--faint);border-radius:999px;overflow:hidden;background:rgba(4,5,12,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.lang button{min-width:48px;min-height:40px;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted);transition:background .35s,color .35s}
+.lang button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* hint */
+.hint{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 26px);z-index:4;transform:translateX(-50%);
+  font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);white-space:pre-line;text-align:center;line-height:2;width:max-content;max-width:92vw;
+  pointer-events:none;transition:opacity 1s ease,transform 1s ease}
+.lang-zh .hint{font-family:var(--zh);font-size:12px;letter-spacing:.32em;text-transform:none}
+.hint.gone{opacity:0;transform:translate(-50%,10px)}
+
+/* intro */
+.intro{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background:radial-gradient(ellipse at 50% 46%,rgba(4,5,12,.15) 0%,rgba(4,5,12,.88) 72%);
+  transition:opacity 1.4s ease,visibility 1.4s;cursor:pointer}
+.intro.gone{opacity:0;visibility:hidden;pointer-events:none}
+.intro .to-zh{font-family:var(--zh);font-size:30px;font-weight:500;letter-spacing:.28em;padding-left:.28em;animation:fadeUp 1.6s .2s ease both}
+.intro .to-en{font-style:italic;font-size:23px;color:var(--muted);animation:fadeUp 1.6s .5s ease both}
+.intro .line{width:1px;height:46px;margin:18px 0 6px;background:linear-gradient(var(--faint),transparent);animation:fadeUp 1.6s .8s ease both}
+.intro .enter{min-height:44px;padding:0 22px;border:1px solid var(--faint);border-radius:999px;font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+  animation:fadeUp 1.6s 1.1s ease both, breathe 3s 2.7s ease-in-out infinite}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes breathe{0%,100%{border-color:var(--faint)}50%{border-color:rgba(243,238,230,.5)}}
+
+/* sheet */
+.sheet{position:fixed;left:50%;bottom:0;z-index:10;width:min(100%,520px);max-height:76vh;max-height:76dvh;display:flex;flex-direction:column;
+  transform:translate(-50%,calc(100% + 24px));background:var(--sheet);-webkit-backdrop-filter:blur(18px) saturate(1.2);backdrop-filter:blur(18px) saturate(1.2);
+  border:1px solid var(--faint);border-bottom:0;border-radius:24px 24px 0 0;box-shadow:0 -24px 70px rgba(0,0,0,.55);
+  transition:transform .65s cubic-bezier(.22,1,.36,1);visibility:hidden}
+.sheet.open{transform:translate(-50%,0);visibility:visible}
+.sheet.closing{visibility:visible}
+.sheet.dragging{transition:none}
+.grab{flex:none;height:30px;display:flex;align-items:center;justify-content:center}
+.grab span{width:40px;height:4px;border-radius:2px;background:var(--faint)}
+.x{position:absolute;right:6px;top:2px;width:44px;height:44px;display:grid;place-items:center;color:var(--muted)}
+.x svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round}
+.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;
+  padding:2px max(20px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 22px) max(20px,env(safe-area-inset-left,0px))}
+.scroll.reveal>*{animation:fadeUp .8s cubic-bezier(.22,1,.36,1) both}
+.scroll.reveal>*:nth-child(2){animation-delay:.08s}
+.scroll.reveal>*:nth-child(3){animation-delay:.16s}
+.scroll.reveal>*:nth-child(4){animation-delay:.24s}
+.scroll.reveal>*:nth-child(5){animation-delay:.32s}
+
+.car{position:relative;border-radius:14px;overflow:hidden;background:#0a0b17;box-shadow:0 0 0 1px var(--faint);max-width:100%}
+.track{display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;scrollbar-width:none}
+.track::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;position:relative;overflow:hidden;scroll-snap-align:center;scroll-snap-stop:always;height:min(48vh,125vw);height:min(48dvh,125vw)}
+.slide .bg{position:absolute;left:-10%;top:-10%;width:120%;height:120%;object-fit:cover;filter:blur(24px) brightness(.5) saturate(1.2);pointer-events:none}
+.slide .fg{position:relative;display:block;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .7s ease}
+.slide .fg.loaded{opacity:1}
+.dots{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:7px;pointer-events:none}
+.car:not(.multi) .dots{display:none}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(243,238,230,.35);box-shadow:0 0 4px rgba(0,0,0,.5);transition:background .3s,transform .3s}
+.dots i.on{background:var(--ink);transform:scale(1.3)}
+.snd{position:absolute;right:10px;top:10px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(4,5,12,.5);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.snd svg,.nav svg{width:18px;height:18px;stroke:var(--ink);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.nav{position:absolute;top:50%;width:40px;height:40px;margin-top:-20px;border-radius:50%;display:none;place-items:center;background:rgba(4,5,12,.45)}
+.nav.prev{left:8px}.nav.nxt{right:8px}
+@media (hover:hover) and (pointer:fine){ .car.multi .nav{display:grid} }
+.toast .b:empty{display:none}
+.photo{position:relative;border-radius:14px;overflow:hidden;background:#0a0b17;box-shadow:0 0 0 1px var(--faint)}
+.photo img{display:block;width:100%;max-height:40vh;max-height:40dvh;object-fit:cover;opacity:0;transform:scale(1.04);transition:opacity .9s ease,transform 1.6s ease}
+.photo img.loaded{opacity:1;transform:none}
+.ph{aspect-ratio:4/3;max-width:100%;display:grid;place-items:center;align-content:center;gap:10px;color:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+  background:radial-gradient(circle at 30% 30%,color-mix(in srgb,var(--star) 22%,transparent),transparent 60%),
+             repeating-linear-gradient(135deg,rgba(243,238,230,.035) 0 10px,transparent 10px 20px)}
+.ph svg{width:28px;height:28px;stroke:var(--star);fill:none;stroke-width:1.3}
+
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin-top:14px;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--muted);font-variant-numeric:tabular-nums}
+.meta .it{display:flex;align-items:center;gap:6px;min-width:0}
+.meta svg{flex:none;width:13px;height:13px;stroke:var(--star);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.meta .idx{color:var(--star);letter-spacing:.16em}
+.lang-zh .meta{font-family:var(--mono),var(--zh)}
+h2{margin:12px 0 10px;font-weight:500;font-size:29px;line-height:1.12;text-wrap:balance}
+.lang-zh h2{font-family:var(--zh);font-size:22px;letter-spacing:.08em;line-height:1.4}
+.letter p{margin:0 0 .85em;font-size:19px;line-height:1.5;max-width:62ch}
+.lang-zh .letter p{font-family:var(--zh);font-size:16px;line-height:1.95;letter-spacing:.04em}
+.letter .sign{text-align:right;font-style:italic;color:var(--muted);margin-top:1.2em}
+.lang-zh .letter .sign{font-style:normal}
+.next{margin-top:8px;width:100%;min-height:50px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;
+  border:1px solid var(--faint);border-radius:14px;font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;transition:background .3s}
+.next:active{background:rgba(243,238,230,.06)}
+.lang-zh .next{font-family:var(--zh);font-size:14px;letter-spacing:.2em}
+.next .dot{width:9px;height:9px;border-radius:50%;background:var(--nextc,#fff);box-shadow:0 0 12px var(--nextc,#fff)}
+.next .go{display:flex;align-items:center;gap:10px}
+.next svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* finale */
+.toast{position:fixed;left:50%;top:40%;z-index:8;width:min(88vw,420px);transform:translate(-50%,-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity 1.6s ease}
+.toast.show{opacity:1}
+.toast .a{font-size:27px;font-style:italic;line-height:1.25;text-wrap:balance}
+.lang-zh .toast .a{font-family:var(--zh);font-style:normal;font-size:21px;letter-spacing:.14em;line-height:1.7}
+.toast .b{margin-top:10px;font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--lit);text-transform:uppercase}
+.lang-zh .toast .b{font-family:var(--zh);font-size:13px;text-transform:none}
+
+@media (prefers-reduced-motion: reduce){
+  .sheet{transition-duration:.2s}
+  .scroll.reveal>*,.intro *{animation:none!important}
+}
+</style>
+
+<style>:root{padding:0}</style>
+</head>
+<body>
+<canvas id="sky" role="img" aria-label="A sky of stars. Some stars are brighter and hold memories."></canvas>
+
+<div class="hud" id="hud" style="opacity:0">
+  <div class="count" id="count" aria-live="polite">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 7.9H23l-6.8 4.9 2.6 7.9L12 17.3l-6.8 4.9 2.6-7.9L1 9.4h8.4z"/></svg>
+    <span><b id="litN" style="font-weight:500">0</b> <span class="of">/ <span id="totN">0</span></span></span>
+  </div>
+  <div class="lang" role="group" aria-label="Language">
+    <button id="bZh" aria-pressed="true">中文</button>
+    <button id="bEn" aria-pressed="false">EN</button>
+  </div>
+</div>
+
+<div class="hint gone" id="hint" data-i="hint"></div>
+
+<div class="toast" id="toast" aria-live="polite"><div class="a" id="toastA"></div><div class="b" id="toastB"></div></div>
+
+<section class="sheet" id="sheet" role="dialog" aria-modal="false" aria-label="Memory">
+  <div class="grab" aria-hidden="true"><span></span></div>
+  <button class="x" id="xBtn" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div class="scroll" id="scroll">
+    <div class="car" id="car">
+      <div class="track" id="track"></div>
+      <div class="dots" id="dots" aria-hidden="true"></div>
+      <button class="nav prev" id="prevS" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="nav nxt" id="nextS" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <div class="meta">
+      <span class="it idx" id="mIdx">01 / 14</span>
+      <span class="it" id="placeIt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg><span id="mPlace"></span></span>
+      <span class="it" id="timeIt"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></svg><span id="mTime"></span></span>
+    </div>
+    <div class="letter" id="mLetter"></div>
+    <button class="next" id="nextBtn"><span id="nextLbl"></span><span class="go"><span class="dot" aria-hidden="true"></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></button>
+  </div>
+</section>
+
+<div class="intro" id="intro">
+  <div class="to-zh" id="introZh"></div>
+  <div class="to-en" id="introEn"></div>
+  <div class="line" aria-hidden="true"></div>
+  <button class="enter" id="enterBtn">轻触进入 · tap to enter</button>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================================================================
+   EDIT HERE — everything personal lives in this block.
+   Stars are listed in chronological order; each arrow points to the
+   next one in this list. Media files live in the media/ folder.
+   ================================================================ */
+const HER_NAME   = { en: 'Gong Hui', zh: '公惠' };
+const FINALE     = { en: "You've lit up every one of our stars", zh: '我们所有的星星,都被你点亮了' };
+const FINALE_SUB = { en: '', zh: '' };
+
+const PL = {
+  fatih:    { en: 'Fatih, Istanbul',            zh: '伊斯坦布尔 · 法提赫' },
+  atasehir: { en: 'Ataşehir, Istanbul',         zh: '伊斯坦布尔 · 阿塔谢希尔' },
+  uskudar:  { en: 'Üsküdar, Istanbul',          zh: '伊斯坦布尔 · 于斯屈达尔' },
+  kadikoy:  { en: 'Kadıköy, Istanbul',          zh: '伊斯坦布尔 · 卡德柯伊' },
+  pendik:   { en: 'Pendik, Istanbul',           zh: '伊斯坦布尔 · 彭迪克' },
+  aksaray:  { en: 'Aksaray, Istanbul',          zh: '伊斯坦布尔 · 阿克萨赖' },
+  eminonu:  { en: 'Eminönü, Istanbul',          zh: '伊斯坦布尔 · 埃米诺努' },
+  buyukada: { en: "Büyükada, Princes' Islands", zh: '王子群岛 · 大岛' },
+  maslak:   { en: 'Maslak, Istanbul',           zh: '伊斯坦布尔 · 马斯拉克' },
+  levent:   { en: 'Levent, Istanbul',           zh: '伊斯坦布尔 · 莱文特' },
+};
+const img = (f, date, time, place) => ({ type: 'img', src: 'media/' + f + '.jpg', date, time, place });
+const vid = (f, date, time, place) => ({ type: 'video', src: 'media/' + f + '.mp4', poster: 'media/' + f + '.jpg', date, time, place });
+
+// In order. Each star's arrow points to the next one in this list.
+const MEMORIES = [
+  { slides: [ img('s0-2','2026-09-20','14:49',PL.atasehir), vid('s0-1','2026-09-20','20:21',PL.fatih) ],
+    letter: { en: "i wont forget this day. we had so much fun. we went to all those places by car, took photos and videos together, you held on my arm for the first time, and in the night, you confessed to me. that day is probably the best day of my life.",
+              zh: '我不会忘记这一天。我们玩得好开心。我们开着车去了那么多地方,一起拍照、拍视频,你第一次挽住了我的手臂,到了晚上,你向我表白了。那一天大概是我这辈子最美好的一天。' } },
+  { slides: [ img('s1-1','2026-09-21','20:21',PL.uskudar), img('s1-2','2026-09-21','21:23',PL.kadikoy) ],
+    letter: { en: "first day of you being my girlfriend. we sat on that bench for an hour and 13 minutes. i remember it all, i dont forget certain dates and times. this is one of them. 21/09/2026, about 1 in the night.",
+              zh: '你成为我女朋友的第一天。我们在那张长椅上坐了一个小时零十三分钟。我全都记得,有些日期和时间我是不会忘的,这就是其中之一。2026年9月21日,大概凌晨一点。' } },
+  { slides: [ img('s2-2','2026-09-22','17:28',PL.pendik), img('s2-1','2026-09-22','20:18',PL.pendik) ],
+    letter: { en: "the day you stayed with us for the first time. you scared me to death by waking me up like that but i like it. please do in the future😋",
+              zh: '你第一次在我们家过夜的那天。你那样把我叫醒,差点把我吓死,但我很喜欢。以后也请继续这样叫醒我😋' } },
+  { slides: [ img('s3-1','2026-09-30','20:58',PL.pendik) ],
+    letter: { en: "you cut my hair. i dont let my dad even touch my hair but i liked it when you cut it. even if you were to intentionally cut it bad, i'd be perfectly fine with it btw. i dont want anybody to find me attractive other than you. i dont need it.",
+              zh: '你给我剪了头发。我连我爸都不让碰我的头发,但你给我剪的时候,我很喜欢。顺便说一句,就算你故意把它剪坏,我也完全没关系。除了你,我不想让任何人觉得我有魅力。我不需要。' } },
+  { slides: [ img('s4-1','2026-10-01','22:52',PL.pendik), img('s4-2','2026-10-02','13:47',PL.aksaray) ],
+    letter: { en: "i love it when you do this. and the photo on the escalator might be my favorite photo of you. you look so adorable there🫠",
+              zh: '我好喜欢你这样做。还有那张在扶梯上的照片,可能是我最喜欢的一张你的照片。你在那张里真的好可爱🫠' } },
+  { slides: [ img('s5-1','2026-10-01','15:40',PL.pendik) ],
+    letter: { en: "i like your expression here. it suits you lol. you look so cute and squish-able😋",
+              zh: '我喜欢你这里的表情。很适合你哈哈。你看起来好可爱,好想捏一捏😋' } },
+  { slides: [ img('s6-1','2026-10-03','18:33',PL.eminonu), img('s6-2',null,null,null) ],
+    letter: { en: "i like these close photos so much. you dont even know how many times a day, it's enough to make my heart race",
+              zh: '我太喜欢这些贴得很近的照片了。你都不知道我一天要看多少遍,每一次都足以让我心跳加速。' } },
+  { slides: [ img('s7-1','2026-10-04','10:46',PL.pendik) ],
+    letter: { en: "in france, people call their crushes and such people \"bread\". i like the picture of my bread looking at breads",
+              zh: '在法国,人们会把自己喜欢的人叫作“面包”。我好喜欢这张照片:我的小面包在看面包。' } },
+  { slides: [ vid('s8-1','2026-10-05','12:46',null), vid('s8-2','2026-10-06','15:01',null) ],
+    letter: { en: "i am so very much in love with you. and i am obsessed with these videos. you have no idea how cute you look. i want to eat you up just by looking at your face😭😭😭",
+              zh: '我真的好爱好爱你。我对这几段视频完全着迷了。你根本不知道你有多可爱。光是看着你的脸,我就想把你一口吃掉😭😭😭' } },
+  { slides: [ img('s9-1','2026-10-05','14:52',PL.eminonu) ],
+    letter: { en: "i dont like these normally, and you wore it wrong. but somehow you still look cute in it. i dont think you'll ever look bad in my eyes. i am obsessed with you",
+              zh: '我平时不喜欢这种东西,而且你还戴错了。可不知道为什么,你戴着还是那么可爱。我觉得在我眼里,你永远都不会不好看。我对你着迷了。' } },
+  { slides: [ img('s10-1','2026-10-06','16:31',PL.buyukada), img('s10-2','2026-10-06','17:16',PL.buyukada), img('s10-3','2026-10-06','17:33',PL.buyukada), img('s10-4','2026-10-06','17:34',PL.buyukada) ],
+    letter: { en: "i enjoyed our time in the island really much. my allergies went crazy that night but i managed, it was totally worth it even if you called me ugly so many times🥲",
+              zh: '我真的很喜欢我们在岛上的时光。那天晚上我的过敏严重发作,但我撑过来了。完全值得,就算你叫了我那么多次丑八怪🥲' } },
+  { slides: [ img('s11-1','2026-10-08','00:36',PL.pendik), img('s11-2','2026-10-09','16:05',PL.pendik) ],
+    letter: { en: "i like sleeping with you. it feels much more comfortable than any bed on the earth can feel. you're always so warm and soft and i like it so much...",
+              zh: '我喜欢和你一起睡觉。那种感觉比地球上任何一张床都要舒服。你总是那么温暖、那么软,我真的好喜欢……' } },
+  { slides: [ img('s12-1','2026-10-06','21:35',PL.pendik), img('s12-2','2026-10-07','14:42',PL.maslak) ],
+    letter: { en: "i love squishing your face. that's all, i love it. cuteness aggression",
+              zh: '我好爱捏你的脸。就这样,我就是爱。可爱侵略性发作。' } },
+  { slides: [ img('sr-1','2026-10-08','12:58',PL.levent), img('sr-2','2026-10-09','20:18',PL.pendik) ],
+    letter: { en: "these photos are one of my favorites of you. i love it when you lay on my lap, and i love the expression on your face so much im melting...",
+              zh: '这几张是我最喜欢的你的照片。我好喜欢你躺在我腿上的样子,也好爱你脸上的这个表情,爱到我整个人都要融化了……' } },
+];
+const SEED = 20260920;   // change to reshuffle where the stars sit
+/* ================================================================ */
+
+const STR = {
+  en:{ hint:'drag to explore · pinch to zoom\ntap the bright stars', next:'Next star', first:'Back to the first star', close:'Close', photo:'photo goes here', enter:'tap to enter' },
+  zh:{ hint:'拖动探索 · 双指缩放\n轻点发光的星星', next:'下一颗星', first:'回到第一颗星', close:'关闭', photo:'照片放这里', enter:'轻触进入' }
+};
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PALETTE = ['#ffb3cb','#ffd98a','#9fe6ff','#c8b5ff','#ffc29c','#ff9f8f','#8fbfff','#f5e6a8'];
+const TINTS = ['#ffffff','#dde6ff','#fff0d8','#e6dcff'];
+const NEB = ['#5a2aa0','#145f78','#86286a','#2b3aa0'];
+
+/* ---------- utils ---------- */
+const $ = (id) => document.getElementById(id);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const mod = (a,b) => ((a % b) + b) % b;
+const easeIO = (t) => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+const easeOut = (t) => 1 - Math.pow(1-t,3);
+const easeBack = (t) => { const c=1.70158, c3=c+1; return 1 + c3*Math.pow(t-1,3) + c*Math.pow(t-1,2); };
+const pad2 = (n) => String(n).padStart(2,'0');
+function rng(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
+const store = {
+  get(k,d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const reduced = (() => { try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } })();
+const haptic = (ms=8) => { try{ navigator.vibrate && navigator.vibrate(ms); }catch(e){} };
+
+/* ---------- kill default browser behaviour ---------- */
+const inScroll = (t) => t && t.closest && t.closest('.scroll');
+document.addEventListener('touchmove', (e) => { if (!inScroll(e.target) || e.touches.length > 1) e.preventDefault(); }, { passive:false });
+document.addEventListener('touchstart', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive:false });
+['gesturestart','gesturechange','gestureend','dblclick','contextmenu','selectstart','dragstart'].forEach((ev) =>
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive:false }));
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => { const n = Date.now(); if (n - lastTouchEnd < 320 && !e.target.closest('button')) e.preventDefault(); lastTouchEnd = n; }, { passive:false });
+document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive:false });
+document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && ['+','-','=','0'].includes(e.key)) e.preventDefault(); });
+
+/* ---------- state ---------- */
+const N = MEMORIES.length;
+const KEY = 'oursky.v1.' + SEED;
+try { if (/[?&]reset\b/.test(location.search) || location.hash === '#reset') localStorage.removeItem(KEY); } catch(e){}
+const saved = store.get(KEY, {});
+let lang = saved.lang === 'en' ? 'en' : 'zh';
+const visited = Array.from({length:N}, (_,i) => !!(saved.v && saved.v[i]));
+const ringBorn = visited.map((v) => v ? -1e9 : 0);
+let lastOpened = typeof saved.last === 'number' ? saved.last : -1;
+const persist = () => store.set(KEY, { v: visited.map(Number), last: lastOpened, lang, h: HEART.found ? 1 : 0 });
+const allLit = () => visited.every(Boolean);
+
+/* ---------- world ---------- */
+const R = rng(SEED);
+const LAYERS = [
+  { p:.14, n:340, r:[.35,.85], a:[.16,.5],  tile:1500, neb:4 },
+  { p:.32, n:220, r:[.5,1.15], a:[.28,.68], tile:1650, neb:3 },
+  { p:.62, n:120, r:[.7,1.5],  a:[.4,.85],  tile:1800, neb:0 },
+  { p:1.0, n:56,  r:[.9,2.0],  a:[.5,.95],  tile:2000, neb:0 },
+];
+LAYERS.forEach((L) => {
+  L.stars = [];
+  for (let i = 0; i < L.n; i++) {
+    L.stars.push({ x:R()*L.tile, y:R()*L.tile, r:lerp(L.r[0],L.r[1],Math.pow(R(),2.2)), a:lerp(L.a[0],L.a[1],R()),
+      tw: R() < .4 ? .5 + R()*2.4 : 0, ph: R()*6.283, c: (R() < .7 ? 0 : 1 + (R()*3|0)) });
+  }
+  L.stars.sort((a,b) => a.c - b.c);
+  L.nebs = [];
+  for (let k = 0; k < L.neb; k++) L.nebs.push({ x:R()*L.tile, y:R()*L.tile, r:340 + R()*520, c:k % NEB.length, a:.16 + R()*.16 });
+});
+
+const M = MEMORIES.map((m,i) => ({ ...m, i, color: m.color || PALETTE[i % PALETTE.length] }));
+(function place(){
+  // map size scales with the number of stars (15 stars ≈ 7000 × 10000 px of sky)
+  const rx = 2000 + N*100, ry = 2900 + N*140, MIN = 900;
+  const pts = [];
+  for (let i = 0; i < N; i++) {
+    let pt = null;
+    if (i === 0) pt = { x: (R()-.5)*120, y: -40 - R()*80 };  // first star: easy to find
+    for (let t = 0; t < 600 && !pt; t++) {
+      const x = (R()*2-1)*rx, y = (R()*2-1)*ry;
+      if (pts.every((q) => Math.hypot(q.x-x, q.y-y) > MIN)) pt = { x, y };
+    }
+    if (!pt) pt = { x:(R()*2-1)*rx, y:(R()*2-1)*ry };
+    pts.push(pt);
+  }
+  M.forEach((m,i) => { m.p = (i === 0 || R() < .5) ? 1.0 : .62; m.x = pts[i].x; m.y = pts[i].y; m.sz = .9 + R()*.3; m.ph = R()*6.283; });
+})();
+
+/* easter egg: a faint heart made of distant stars, tucked in a corner of the map */
+const HEART = { p:.32, pts:[], found:false, foundAt:0, dwell:0 };
+(function(){
+  // find an open patch of sky between memory stars, not too far out
+  const xs = M.map((m) => m.x/m.p), ys = M.map((m) => m.y/m.p);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  let best = null, bd = -1;
+  for (let t = 0; t < 300; t++) {
+    const cx = lerp(x0, x1, .2 + R()*.6), cy = lerp(y0, y1, .2 + R()*.6);
+    const d = Math.min(...M.map((m, i) => Math.hypot(xs[i] - cx, ys[i] - cy)));
+    if (d > bd) { bd = d; best = { cx, cy }; }
+  }
+  HEART.camX = best.cx; HEART.camY = best.cy;
+  HEART.cx = best.cx*HEART.p; HEART.cy = best.cy*HEART.p;
+  const n = 16, s = 9.5;
+  for (let i = 0; i < n; i++) {
+    const t = i/n*Math.PI*2;
+    const x = 16*Math.pow(Math.sin(t),3), y = -(13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t));
+    HEART.pts.push({ x: HEART.cx + x*s + (R()-.5)*6, y: HEART.cy + y*s + (R()-.5)*6, r: 1 + R()*.45, ph: R()*6.283 });
+  }
+  if (saved.h) { HEART.found = true; HEART.foundAt = -1e9; }
+})();
+
+/* ---------- canvas + sprites ---------- */
+const cv = $('sky'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, bgGrad = null;
+const B = { x0:0, x1:0, y0:0, y1:0 };
+function sprite(size, stops){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  stops.forEach(([o,col]) => gr.addColorStop(o,col));
+  g.fillStyle = gr; g.fillRect(0,0,size,size); return c;
+}
+const dotS = TINTS.map((t) => sprite(32, [[0,'#fff'],[.18,rgba(t,.9)],[.45,rgba(t,.18)],[1,rgba(t,0)]]));
+const nebS = NEB.map((c) => sprite(256, [[0,rgba(c,1)],[.35,rgba(c,.5)],[.7,rgba(c,.14)],[1,rgba(c,0)]]));
+M.forEach((m) => { m.glow = sprite(96, [[0,'#fff'],[.1,rgba(m.color,.9)],[.28,rgba(m.color,.26)],[.6,rgba(m.color,.05)],[1,rgba(m.color,0)]]); });
+const heartS = sprite(32, [[0,'#fff'],[.2,'rgba(255,214,226,.8)'],[.5,'rgba(255,190,210,.15)'],[1,'rgba(255,190,210,0)']]);
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W*DPR); cv.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  bgGrad = ctx.createLinearGradient(0,0,0,H);
+  bgGrad.addColorStop(0,'#060716'); bgGrad.addColorStop(.55,'#04050c'); bgGrad.addColorStop(1,'#08061a');
+  const off = H*.37;
+  B.x0 = Math.min(...M.map((m) => m.x/m.p)) - 220; B.x1 = Math.max(...M.map((m) => m.x/m.p)) + 220;
+  B.y0 = Math.min(...M.map((m) => m.y/m.p)) - 220; B.y1 = Math.max(...M.map((m) => (m.y + off)/m.p)) + 220;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- camera ---------- */
+const cam = { x:0, y:40, z:.62 };
+const vel = { x:0, y:0 };
+let flight = null, entered = false, sceneA = .45, enterT = 0;
+const zoomFor = (p, z) => Math.max(.2, 1 + ((z ?? cam.z) - 1)*p);
+let T = 0;
+const drift = () => ({ x: Math.sin(T*.07)*14, y: Math.cos(T*.053)*10 });
+
+function flyCam(tx, ty, z1, done){
+  const dist = Math.hypot(tx - cam.x, ty - cam.y);
+  flight = { x0:cam.x, y0:cam.y, z0:cam.z, x1:tx, y1:ty, z1, t0:performance.now(),
+    dur: reduced ? 350 : clamp(700 + dist*.3, 800, 2400), dip: reduced ? 0 : Math.min(.5, dist/5000), done };
+  vel.x = vel.y = 0;
+}
+function flyTo(i, done){
+  const m = M[i];
+  const z1 = clamp(cam.z, 1, 1.35), zl = zoomFor(m.p, z1);
+  const d = drift();
+  flyCam(m.x/m.p - d.x, (m.y + (H*.5 - H*.135)/zl)/m.p - d.y, z1, done);
+}
+function flyHeart(){
+  const d = drift();
+  if (openIdx >= 0) closeSheet();
+  flyCam(HEART.camX - d.x, HEART.camY - d.y, 1, null);
+}
+
+/* ---------- DOM refs ---------- */
+const sheet = $('sheet'), scroller = $('scroll'), hud = $('hud'), hint = $('hint'), intro = $('intro'), toast = $('toast');
+let openIdx = -1, pendingFinale = false, hintTimer = 0;
+$('totN').textContent = N;
+
+function fmtWhen(m){
+  const [y,mo,d] = m.date.split('-').map(Number);
+  return lang === 'zh' ? `${y}年${mo}月${d}日 · ${m.time}` : `${d} ${MONTHS[mo-1]} ${y} · ${m.time}`;
+}
+/* ---------- slides ---------- */
+const track = $('track'), dots = $('dots'), car = $('car');
+const SVG_MUTED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l4 6M21 9l-4 6"/></svg>';
+const SVG_SOUND = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 010 7M19 6a8.5 8.5 0 010 12"/></svg>';
+let curSlide = 0;
+function buildSlides(m){
+  track.querySelectorAll('video').forEach((v) => { v.pause(); v.removeAttribute('src'); v.load(); });
+  track.textContent = ''; dots.textContent = '';
+  m.slides.forEach((s) => {
+    const sl = document.createElement('div'); sl.className = 'slide';
+    const bg = document.createElement('img'); bg.className = 'bg'; bg.alt = ''; bg.decoding = 'async'; bg.draggable = false;
+    bg.src = s.type === 'video' ? s.poster : s.src; sl.appendChild(bg);
+    if (s.type === 'video') {
+      const v = document.createElement('video'); v.className = 'fg';
+      v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'auto';
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+      v.poster = s.poster; v.src = s.src;
+      v.addEventListener('loadeddata', () => v.classList.add('loaded'));
+      const b = document.createElement('button'); b.className = 'snd'; b.setAttribute('aria-label', 'Sound'); b.innerHTML = SVG_MUTED;
+      const toggle = (e) => { if (e) e.stopPropagation(); v.muted = !v.muted; b.innerHTML = v.muted ? SVG_MUTED : SVG_SOUND; v.play().catch(() => {}); };
+      b.addEventListener('click', toggle); v.addEventListener('click', toggle);
+      sl.appendChild(v); sl.appendChild(b);
+    } else {
+      const im = document.createElement('img'); im.className = 'fg'; im.alt = ''; im.decoding = 'async'; im.draggable = false;
+      im.onload = () => im.classList.add('loaded'); im.src = s.src; if (im.complete) im.classList.add('loaded');
+      sl.appendChild(im);
+    }
+    track.appendChild(sl);
+    dots.appendChild(document.createElement('i'));
+  });
+  car.classList.toggle('multi', m.slides.length > 1);
+  track.scrollLeft = 0;
+  curSlide = 0;
+}
+function setSlide(k){
+  const m = M[openIdx]; if (!m) return;
+  k = clamp(k, 0, m.slides.length - 1); curSlide = k;
+  [...dots.children].forEach((d, j) => d.classList.toggle('on', j === k));
+  const s = m.slides[k];
+  $('placeIt').hidden = !s.place; if (s.place) $('mPlace').textContent = s.place[lang];
+  $('timeIt').hidden = !s.date;   if (s.date) $('mTime').textContent = fmtWhen(s);
+  [...track.children].forEach((sl, j) => {
+    const v = sl.querySelector('video'); if (!v) return;
+    if (j === k && sheet.classList.contains('open')) v.play().catch(() => {});
+    else { v.pause(); if (!v.muted) { v.muted = true; sl.querySelector('.snd').innerHTML = SVG_MUTED; } }
+  });
+}
+track.addEventListener('scroll', () => {
+  const k = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+  if (k !== curSlide) setSlide(k);
+}, { passive:true });
+$('prevS').addEventListener('click', () => track.scrollBy({ left: -track.clientWidth, behavior: 'smooth' }));
+$('nextS').addEventListener('click', () => track.scrollBy({ left: track.clientWidth, behavior: 'smooth' }));
+function pauseAll(){ track.querySelectorAll('video').forEach((v) => v.pause()); }
+function preload(i){
+  const s = M[i] && M[i].slides[0]; if (!s) return;
+  const im = new Image(); im.src = s.type === 'video' ? s.poster : s.src;
+}
+
+function fillSheet(i, reveal){
+  const m = M[i], n = (i+1) % N, S = STR[lang];
+  sheet.style.setProperty('--star', m.color);
+  $('nextBtn').style.setProperty('--nextc', M[n].color);
+  $('mIdx').textContent = `${pad2(i+1)} / ${pad2(N)}`;
+  const L = $('mLetter'); L.textContent = '';
+  m.letter[lang].split(/\n\s*\n/).forEach((t) => { const p = document.createElement('p'); p.textContent = t.trim(); L.appendChild(p); });
+  $('nextLbl').textContent = n === 0 ? S.first : S.next;
+  $('nextBtn').hidden = N < 2;
+  if (reveal) buildSlides(m);
+  setSlide(curSlide);
+  if (reveal) { scroller.scrollTop = 0; scroller.classList.remove('reveal'); void scroller.offsetWidth; scroller.classList.add('reveal'); }
+}
+function openMemory(i){
+  openIdx = i; lastOpened = i;
+  sheet.classList.remove('closing'); sheet.classList.add('open');
+  fillSheet(i, true);
+  preload((i + 1) % N);
+  if (!visited[i]) {
+    visited[i] = true; ringBorn[i] = performance.now();
+    if (allLit()) pendingFinale = true;
+    setTimeout(updateCount, 500);
+    haptic(14);
+  }
+  persist();
+}
+function closeSheet(){
+  if (openIdx < 0) return;
+  openIdx = -1;
+  pauseAll();
+  sheet.classList.add('closing'); sheet.classList.remove('open', 'dragging'); sheet.style.transform = '';
+  setTimeout(() => sheet.classList.remove('closing'), 700);
+  if (pendingFinale) { pendingFinale = false; setTimeout(showFinale, 700); }
+}
+function goTo(i){
+  hideHint();
+  if (openIdx >= 0) closeSheet();
+  haptic(6);
+  flyTo(i, () => openMemory(i));
+}
+function updateCount(){
+  const n = visited.filter(Boolean).length, el = $('count');
+  $('litN').textContent = n;
+  el.classList.add('bump'); setTimeout(() => el.classList.remove('bump'), 550);
+}
+let finaleAt = 0;
+function showFinale(){
+  $('toastA').textContent = FINALE[lang]; $('toastB').textContent = FINALE_SUB[lang];
+  toast.classList.add('show'); finaleAt = performance.now();
+  setTimeout(() => toast.classList.remove('show'), 6500);
+}
+function hideHint(){ clearTimeout(hintTimer); hint.classList.add('gone'); }
+
+function applyLang(){
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+  document.body.classList.toggle('lang-zh', lang === 'zh');
+  $('bZh').setAttribute('aria-pressed', lang === 'zh'); $('bEn').setAttribute('aria-pressed', lang === 'en');
+  hint.textContent = STR[lang].hint;
+  $('xBtn').setAttribute('aria-label', STR[lang].close);
+  if (openIdx >= 0) fillSheet(openIdx, false);
+  if (toast.classList.contains('show')) { $('toastA').textContent = FINALE[lang]; $('toastB').textContent = FINALE_SUB[lang]; }
+}
+$('bZh').addEventListener('click', () => { lang = 'zh'; applyLang(); persist(); });
+$('bEn').addEventListener('click', () => { lang = 'en'; applyLang(); persist(); });
+$('xBtn').addEventListener('click', closeSheet);
+$('nextBtn').addEventListener('click', () => goTo((openIdx + 1) % N));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeSheet();
+  if (!entered && (e.key === 'Enter' || e.key === ' ')) enter();
+});
+
+$('introZh').textContent = '给 ' + HER_NAME.zh;
+$('introEn').textContent = 'for ' + HER_NAME.en;
+function enter(){
+  if (entered) return;
+  entered = true; enterT = performance.now(); haptic(10);
+  intro.classList.add('gone');
+  hud.style.opacity = 1;
+  updateCount();
+  if (location.hash === '#heart') { setTimeout(flyHeart, 2700); return; }
+  setTimeout(() => { hint.classList.remove('gone'); hintTimer = setTimeout(hideHint, 9000); }, 1600);
+}
+window.addEventListener('hashchange', () => { if (entered && location.hash === '#heart') flyHeart(); });
+intro.addEventListener('click', enter);
+
+/* sheet: swipe down to close */
+(() => {
+  let y0 = null, x0 = 0, dy = 0, pulling = false, axis = null;
+  sheet.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; dy = 0; pulling = false; axis = null;
+  }, { passive:true });
+  sheet.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    const d = e.touches[0].clientY - y0, dx = e.touches[0].clientX - x0;
+    if (!axis && Math.hypot(dx, d) > 6) axis = Math.abs(dx) > Math.abs(d) ? 'x' : 'y';
+    if (axis === 'x') return;   // horizontal = swiping slides
+    if (!pulling && d > 6 && scroller.scrollTop <= 0) pulling = true;
+    if (pulling) {
+      e.preventDefault();
+      dy = Math.max(0, d);
+      sheet.classList.add('dragging');
+      sheet.style.transform = `translate(-50%, ${dy}px)`;
+    }
+  }, { passive:false });
+  const end = () => {
+    if (y0 == null) return;
+    y0 = null;
+    if (pulling && dy > 90) { closeSheet(); }
+    else { sheet.classList.remove('dragging'); sheet.style.transform = ''; }
+    pulling = false;
+  };
+  sheet.addEventListener('touchend', end); sheet.addEventListener('touchcancel', end);
+})();
+
+/* ---------- pointer input on the sky ---------- */
+const ptrs = new Map();
+let drag = null, pinch = null, lastInteract = 0;
+const screenPos = new Array(N);   // filled every frame
+let guide = null;
+
+cv.addEventListener('pointerdown', (e) => {
+  if (!entered) return;
+  try { cv.setPointerCapture(e.pointerId); } catch(_){}
+  ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  lastInteract = performance.now();
+  if (ptrs.size === 1) {
+    drag = { x:e.clientX, y:e.clientY, sx:e.clientX, sy:e.clientY, t:performance.now(), moved:false, samples:[] };
+    vel.x = vel.y = 0;
+  } else if (ptrs.size === 2) {
+    const [a,b] = [...ptrs.values()];
+    pinch = { d: Math.hypot(a.x-b.x, a.y-b.y), z: cam.z, mx:(a.x+b.x)/2, my:(a.y+b.y)/2 };
+    if (drag) drag.moved = true;
+    flight = null;
+  }
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  const now = performance.now();
+  if (pinch && ptrs.size >= 2) {
+    const [a,b] = [...ptrs.values()];
+    const d = Math.hypot(a.x-b.x, a.y-b.y), mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    cam.z = clamp(pinch.z * d / pinch.d, .3, 1.9);
+    cam.x -= (mx - pinch.mx) / cam.z; cam.y -= (my - pinch.my) / cam.z;
+    pinch.mx = mx; pinch.my = my;
+    return;
+  }
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 9) { drag.moved = true; cv.classList.add('dragging'); flight = null; hideHint(); }
+  if (!drag.moved) return;
+  let mx = -dx / cam.z, my = -dy / cam.z;
+  if ((cam.x < B.x0 && mx < 0) || (cam.x > B.x1 && mx > 0)) mx *= .35;
+  if ((cam.y < B.y0 && my < 0) || (cam.y > B.y1 && my > 0)) my *= .35;
+  cam.x += mx; cam.y += my;
+  drag.samples.push({ t:now, x:cam.x, y:cam.y });
+  while (drag.samples.length && now - drag.samples[0].t > 110) drag.samples.shift();
+});
+function endPtr(e, cancelled){
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId);
+  lastInteract = performance.now();
+  if (pinch) {
+    if (ptrs.size < 2) pinch = null;
+    if (ptrs.size === 1) { const [p] = [...ptrs.values()]; drag = { x:p.x, y:p.y, sx:p.x, sy:p.y, t:0, moved:true, samples:[] }; }
+    return;
+  }
+  if (!drag) return;
+  cv.classList.remove('dragging');
+  if (!cancelled && !drag.moved && performance.now() - drag.t < 450) onTap(e.clientX, e.clientY);
+  else if (drag.samples.length > 1) {
+    const s0 = drag.samples[0], s1 = drag.samples[drag.samples.length-1], dt = (s1.t - s0.t)/1000;
+    if (dt > 0.01 && performance.now() - s1.t < 80) { vel.x = clamp((s1.x - s0.x)/dt, -2600, 2600); vel.y = clamp((s1.y - s0.y)/dt, -2600, 2600); }
+  }
+  drag = null;
+}
+cv.addEventListener('pointerup', (e) => endPtr(e, false));
+cv.addEventListener('pointercancel', (e) => endPtr(e, true));
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (!entered) return;
+  if (e.ctrlKey) cam.z = clamp(cam.z * Math.exp(-e.deltaY*.01), .3, 1.9);
+  else { cam.x += e.deltaX / cam.z; cam.y += e.deltaY / cam.z; flight = null; }
+  hideHint();
+}, { passive:false });
+
+function onTap(x, y){
+  hideHint();
+  if (guide && Math.hypot(x - guide.x, y - guide.y) < 36) { guide.i === 'heart' ? flyHeart() : goTo(guide.i); return; }
+  let best = -1, bd = 40;
+  for (let i = 0; i < N; i++) { const s = screenPos[i]; if (!s) continue; const d = Math.hypot(x - s.x, y - s.y); if (d < bd) { bd = d; best = i; } }
+  if (best >= 0) { if (best !== openIdx) goTo(best); return; }
+  if (openIdx >= 0) closeSheet();
+}
+
+function nextTarget(){
+  if (allLit()) return -1;
+  for (let k = 1; k <= N; k++) { const i = mod(lastOpened + k, N); if (!visited[i]) return i; }
+  return -1;
+}
+
+/* ---------- shooting stars ---------- */
+const shooters = [];
+let nextShoot = 4 + Math.random()*5;
+
+/* ---------- loop ---------- */
+let prev = performance.now();
+function frame(now){
+  const dt = Math.min(.05, (now - prev)/1000); prev = now; T += dt;
+
+  // camera motion
+  if (!entered) { cam.x += 5*dt; }
+  else if (enterT && now - enterT < 2600 && !flight && !drag && !pinch) {
+    const u = easeOut(clamp((now - enterT)/2600, 0, 1));
+    cam.z = lerp(.62, 1, u);
+  }
+  sceneA = entered ? lerp(.45, 1, easeOut(clamp((now - enterT)/1800, 0, 1))) : .45;
+
+  if (flight) {
+    const u = clamp((now - flight.t0)/flight.dur, 0, 1), e = easeIO(u);
+    cam.x = lerp(flight.x0, flight.x1, e); cam.y = lerp(flight.y0, flight.y1, e);
+    cam.z = Math.max(.25, lerp(flight.z0, flight.z1, e)*(1 - flight.dip*Math.sin(Math.PI*u)));
+    if (u >= 1) { const cb = flight.done; flight = null; cb && cb(); }
+  } else if (!drag && !pinch) {
+    if (Math.abs(vel.x) + Math.abs(vel.y) > 2) {
+      cam.x += vel.x*dt; cam.y += vel.y*dt;
+      const k = Math.exp(-dt*3.2); vel.x *= k; vel.y *= k;
+    }
+    const bx = clamp(cam.x, B.x0, B.x1), by = clamp(cam.y, B.y0, B.y1), s = Math.min(1, dt*7);
+    if (bx !== cam.x) { cam.x += (bx - cam.x)*s; vel.x *= .8; }
+    if (by !== cam.y) { cam.y += (by - cam.y)*s; vel.y *= .8; }
+  }
+
+  draw(now, dt);
+  requestAnimationFrame(frame);
+}
+
+function draw(now, dt){
+  const d = drift(), cx = cam.x + d.x, cy = cam.y + d.y, z = cam.z;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
+
+  // background layers
+  ctx.globalCompositeOperation = 'lighter';
+  for (const L of LAYERS) {
+    const zl = zoomFor(L.p, z), Tz = L.tile*zl;
+    if (!(Tz > 100)) continue;   // safety: never let the tiling loop spin
+    const ox = W/2 - cx*L.p*zl, oy = H/2 - cy*L.p*zl;
+    for (const nb of L.nebs) {
+      const r = nb.r*zl, bx = mod(nb.x*zl + ox, Tz), by = mod(nb.y*zl + oy, Tz);
+      ctx.globalAlpha = nb.a*sceneA;
+      for (let x = bx - Tz; x < W + r; x += Tz) { if (x < -r) continue;
+        for (let y = by - Tz; y < H + r; y += Tz) { if (y < -r) continue; ctx.drawImage(nebS[nb.c], x - r, y - r, r*2, r*2); } }
+    }
+    const rs = Math.sqrt(zl);
+    for (const s of L.stars) {
+      const a = s.a*sceneA*(s.tw ? .62 + .38*Math.sin(T*s.tw + s.ph) : 1);
+      const r = s.r*rs, sx = mod(s.x*zl + ox, Tz), sy = mod(s.y*zl + oy, Tz);
+      ctx.globalAlpha = a;
+      for (let x = sx - Tz; x < W + 6; x += Tz) { if (x < -6) continue;
+        for (let y = sy - Tz; y < H + 6; y += Tz) { if (y < -6) continue;
+          if (r < 1.05) { ctx.fillStyle = TINTS[s.c]; ctx.fillRect(x - r, y - r, r*2, r*2); }
+          else ctx.drawImage(dotS[s.c], x - r*3.2, y - r*3.2, r*6.4, r*6.4);
+        } }
+    }
+  }
+
+  // the hidden heart
+  {
+    const zl = zoomFor(HEART.p, z), rs = Math.sqrt(zl);
+    const hx = (HEART.cx - cx*HEART.p)*zl + W/2, hy = (HEART.cy - cy*HEART.p)*zl + H/2;
+    HEART.sx = hx; HEART.sy = hy;
+    if (hx > -300 && hx < W + 300 && hy > -300 && hy < H + 300) {
+      if (!HEART.found && entered && openIdx < 0) {
+        const near = Math.hypot(hx - W/2, hy - H/2) < Math.min(W, H)*.36 && zl > .55;
+        HEART.dwell = near ? HEART.dwell + dt : 0;
+        if (HEART.dwell > .8) { HEART.found = true; HEART.foundAt = now; haptic(20); persist(); }
+      }
+      const lineU = HEART.found ? easeIO(clamp((now - HEART.foundAt)/2600, 0, 1)) : 0;
+      const sp = HEART.pts.map((p) => ({ x: (p.x - cx*HEART.p)*zl + W/2, y: (p.y - cy*HEART.p)*zl + H/2 }));
+      if (lineU > 0) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#ffc4d6'; ctx.lineWidth = .8; ctx.globalAlpha = .2*sceneA;
+        const segs = sp.length*lineU;
+        ctx.beginPath(); ctx.moveTo(sp[0].x, sp[0].y);
+        for (let i = 1; i <= Math.ceil(segs) && i <= sp.length; i++) {
+          const a = sp[i-1], b = sp[i % sp.length], f = Math.min(1, segs - (i-1));
+          ctx.lineTo(a.x + (b.x - a.x)*f, a.y + (b.y - a.y)*f);
+        }
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+      }
+      HEART.pts.forEach((p, i) => {
+        const s = sp[i], r = p.r*rs*(1 + .25*lineU);
+        ctx.globalAlpha = sceneA*(.72 + .15*lineU)*(.7 + .3*Math.sin(T*1.3 + p.ph));
+        ctx.drawImage(heartS, s.x - r*3.4, s.y - r*3.4, r*6.8, r*6.8);
+      });
+    }
+  }
+
+  // shooting stars (screen space)
+  if (entered) {
+    nextShoot -= dt;
+    if (nextShoot <= 0 && !reduced) {
+      nextShoot = 7 + Math.random()*9;
+      const ang = Math.PI*(.62 + Math.random()*.16);
+      shooters.push({ x: W*(.2 + Math.random()*.9), y: H*Math.random()*.45, vx: Math.cos(ang)*900, vy: Math.sin(ang)*900, life: 0, max: .75 + Math.random()*.4 });
+    }
+    for (let k = shooters.length - 1; k >= 0; k--) {
+      const s = shooters[k]; s.life += dt; s.x += s.vx*dt; s.y += s.vy*dt;
+      if (s.life > s.max) { shooters.splice(k,1); continue; }
+      const f = Math.sin(Math.PI*s.life/s.max), tx = s.x - s.vx*.11, ty = s.y - s.vy*.11;
+      const g = ctx.createLinearGradient(s.x, s.y, tx, ty);
+      g.addColorStop(0, `rgba(255,255,255,${.85*f})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 1; ctx.strokeStyle = g; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(tx, ty); ctx.stroke();
+    }
+  }
+
+  // memory star screen positions
+  for (let i = 0; i < N; i++) {
+    const m = M[i], zl = zoomFor(m.p, z);
+    screenPos[i] = { x: (m.x - cx*m.p)*zl + W/2, y: (m.y - cy*m.p)*zl + H/2, k: clamp(zl, .75, 1.35) };
+  }
+
+  // threads between consecutive lit stars: your constellation
+  ctx.globalCompositeOperation = 'source-over';
+  const all = allLit();
+  for (let i = 0; i < N; i++) {
+    const j = (i + 1) % N;
+    if (N < 2 || (j === 0 && !all) || !visited[i] || !visited[j]) continue;
+    const a = screenPos[i], b = screenPos[j];
+    const born = Math.max(ringBorn[i], ringBorn[j], j === 0 ? finaleAt : 0);
+    const u = easeIO(clamp((now - born)/1400, 0, 1));
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy); if (len < 70) continue;
+    const ux = dx/len, uy = dy/len, s0 = 24*a.k, s1 = len - 24*b.k;
+    const e = s0 + (s1 - s0)*u;
+    ctx.globalAlpha = .22*sceneA; ctx.strokeStyle = '#f3eee6'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.x + ux*s0, a.y + uy*s0); ctx.lineTo(a.x + ux*e, a.y + uy*e); ctx.stroke();
+  }
+
+  const tgt = entered ? nextTarget() : -1;
+
+  for (let i = 0; i < N; i++) {
+    const m = M[i], s = screenPos[i], k = s.k;
+    if (s.x < -80 || s.x > W + 80 || s.y < -80 || s.y > H + 80) continue;
+
+    // ripple on the next star to find
+    if (i === tgt && openIdx < 0 && !flight) {
+      const ph = ((T + 0.3) % 2.6)/2.6;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = .16*(1 - ph)*sceneA; ctx.strokeStyle = m.color; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(s.x, s.y, (8 + 22*easeOut(ph))*k, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // glow + faint spikes + core: a little brighter and warmer than its neighbours, nothing more
+    ctx.globalCompositeOperation = 'lighter';
+    const focus = i === openIdx ? 1.25 : 1;
+    const tw = .78 + .22*Math.sin(T*1.7 + m.ph);
+    const g = 30*k*m.sz*focus;
+    ctx.globalAlpha = sceneA*(visited[i] ? .9 : .78)*tw; ctx.drawImage(m.glow, s.x - g/2, s.y - g/2, g, g);
+    const sp = 7*k*m.sz*focus;
+    ctx.globalAlpha = .16*sceneA*tw; ctx.strokeStyle = m.color; ctx.lineWidth = .7;
+    ctx.beginPath(); ctx.moveTo(s.x - sp, s.y); ctx.lineTo(s.x + sp, s.y); ctx.moveTo(s.x, s.y - sp); ctx.lineTo(s.x, s.y + sp); ctx.stroke();
+    ctx.globalAlpha = sceneA; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, 1.45*k*m.sz, 0, Math.PI*2); ctx.fill();
+
+    // green dashed ring once opened: separate dashes, slowly rotating
+    ctx.globalCompositeOperation = 'source-over';
+    if (visited[i]) {
+      const age = (now - ringBorn[i])/1000, p = clamp(age/1.1, 0, 1);
+      const rr = 17*k*(.55 + .45*easeBack(p));
+      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(T*.28 + m.ph);
+      ctx.globalAlpha = .9*sceneA; ctx.strokeStyle = '#6dffa8'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+      const DASH = 9, seg = Math.PI*2/DASH, on = seg*.4, sweep = Math.PI*2*easeOut(p);
+      for (let dsh = 0; dsh < DASH; dsh++) {
+        const a0 = dsh*seg; if (a0 >= sweep) break;
+        ctx.beginPath(); ctx.arc(0, 0, rr, a0, Math.min(a0 + on, sweep)); ctx.stroke();
+      }
+      ctx.lineCap = 'butt'; ctx.restore();
+      if (p < 1) { // a little spark burst when it lights up
+        const q = easeOut(p);
+        ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = '#6dffa8';
+        for (let a = 0; a < 8; a++) {
+          const an = a*Math.PI/4 + m.ph, rd = rr*(1 + .9*q);
+          ctx.globalAlpha = (1 - p)*.9; ctx.beginPath(); ctx.arc(s.x + Math.cos(an)*rd, s.y + Math.sin(an)*rd, 1.4, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+
+    // tiny arrow toward the next star
+    if (N > 1) {
+      const n = screenPos[(i + 1) % N];
+      const ang = Math.atan2(n.y - s.y, n.x - s.x);
+      const r = (visited[i] ? 27 : 19)*k + 1.6*Math.sin(T*2.4 + i);
+      const ax = s.x + Math.cos(ang)*r, ay = s.y + Math.sin(ang)*r, sc = .8*k;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(ang);
+      ctx.globalAlpha = .5*sceneA; ctx.strokeStyle = '#f3eee6'; ctx.lineWidth = 1.3; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(5*sc, 0); ctx.lineTo(-3.5*sc, -4*sc); ctx.lineTo(-1.5*sc, 0); ctx.lineTo(-3.5*sc, 4*sc); ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // edge guide toward the next star when it is off-screen
+  guide = null;
+  const heartHint = tgt < 0 && allLit() && !HEART.found;   // reward: once every star is lit, point to the heart
+  if ((tgt >= 0 || heartHint) && openIdx < 0 && !flight && entered) {
+    const s = tgt >= 0 ? screenPos[tgt] : { x: HEART.sx, y: HEART.sy };
+    const gGlow = tgt >= 0 ? M[tgt].glow : heartS, gCol = tgt >= 0 ? M[tgt].color : '#ffc4d6';
+    const top = 84, bot = H - 76, lft = 28, rgt = W - 28;
+    if (s.x < lft || s.x > rgt || s.y < top || s.y > bot) {
+      const ox = W/2, oy = (top + bot)/2, dx = s.x - ox, dy = s.y - oy;
+      const tx = dx > 0 ? (rgt - ox)/dx : dx < 0 ? (lft - ox)/dx : Infinity;
+      const ty = dy > 0 ? (bot - oy)/dy : dy < 0 ? (top - oy)/dy : Infinity;
+      const t = Math.min(tx, ty), gx = ox + dx*t, gy = oy + dy*t, ang = Math.atan2(dy, dx);
+      const bob = 3*Math.sin(T*3);
+      guide = { x: gx, y: gy, i: tgt >= 0 ? tgt : 'heart' };
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = .7*sceneA; ctx.drawImage(gGlow, gx - 18, gy - 18, 36, 36);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.save(); ctx.translate(gx + Math.cos(ang)*(14 + bob), gy + Math.sin(ang)*(14 + bob)); ctx.rotate(ang);
+      ctx.globalAlpha = .9*sceneA; ctx.strokeStyle = gCol; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(3, 0); ctx.lineTo(-4, 6); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+}
+
+applyLang();
+$('litN').textContent = visited.filter(Boolean).length;
+requestAnimationFrame(frame);
+
+})();
+</script>
+
+</body>
+</html>
